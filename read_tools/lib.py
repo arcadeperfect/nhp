@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pysequitur import integrations, file_sequence, Components
+from pysequitur import integrations, file_sequence, Components, FileSequence
 
 
 import nuke
@@ -66,7 +66,7 @@ class ReadWrapper:
             
     
     def rename(self, 
-               new_name: str | None = None, 
+               name: str | None = None, 
                delimiter: str | None = None, 
                padding: int | None = None, 
                suffix: str | None = None, 
@@ -88,7 +88,7 @@ class ReadWrapper:
         
         
         self.file_sequence.rename_to(
-            Components(prefix = new_name, delimiter = delimiter, padding = padding, suffix = suffix, extension = extension)
+            Components(prefix = name, delimiter = delimiter, padding = padding, suffix = suffix, extension = extension)
         )
         
         self.read_node['file'].setValue(
@@ -98,7 +98,7 @@ class ReadWrapper:
         return self
         
         
-    def offset_frames(self, offset: int):
+    def offset(self, offset: int):
         """
         Offset the frame numbers in the sequence by the given amount and
         update the Read node path.
@@ -156,7 +156,7 @@ class ReadWrapper:
         if not self.file_sequence:
             raise ValueError("No file sequence found")
         
-        return self.offset_frames(frame - self.file_sequence.first_frame)
+        return self.offset(frame - self.file_sequence.first_frame)
     
     def copy(self, 
              name: str | None = None, 
@@ -180,12 +180,98 @@ class ReadWrapper:
                     raise ValueError(f"Directory {directory} does not exist")
                 
         
-        return self.file_sequence.copy_to(
+        new_seq = self.file_sequence.copy_to(
             new_name = Components(prefix = name, delimiter = delimiter, padding = padding, suffix = suffix, extension = extension), 
             new_directory = directory
         )
+        
+        return self.__class__.from_path(new_seq.absolute_file_name)
         
              
     @property
     def directory(self):
         return self.file_sequence.directory
+    
+    @property
+    def first_frame(self):
+        return self.file_sequence.first_frame
+    
+    @property
+    def last_frame(self):
+        return self.file_sequence.last_frame
+    
+    @property
+    def frame_count(self):
+        return self.file_sequence.frame_count
+    
+    @property
+    def name(self):
+        return self.file_sequence.prefix
+    
+    @property
+    def extension(self):
+        return self.file_sequence.extension
+    
+    @property
+    def suffix(self):
+        return self.file_sequence.suffix
+    
+    @property
+    def delimiter(self):
+        return self.file_sequence.delimiter
+    
+    
+
+    @classmethod
+    def from_path(cls, abs_path: str) -> "ReadWrapper":
+        
+        path = Path(abs_path)
+    
+        if not path.parent.exists():
+            raise ValueError(f"Directory {path.parent} does not exist")
+        
+        file_sequence = FileSequence.match_sequence_string_absolute(abs_path)
+        
+        if not file_sequence:
+            raise ValueError(f"File sequence {abs_path} invalid")
+        
+        read_node = nuke.createNode("Read")
+        read_node['file'].setValue(file_sequence.absolute_file_name)
+        read_node['first'].setValue(file_sequence.first_frame)
+        read_node['origfirst'].setValue(file_sequence.first_frame)
+        read_node['last'].setValue(file_sequence.last_frame)
+        read_node['origlast'].setValue(file_sequence.last_frame)
+        
+        return cls(read_node)
+
+    @classmethod
+    def from_write(cls, source_node: nuke.Node):
+        
+        if not "file" in source_node.knobs():
+            raise ValueError("Source node does not have a file knob")
+        
+        return cls.from_path(source_node['file'].getValue())
+
+
+
+
+def node_from_sequence_string(sequence_string: str) -> nuke.Node:
+    
+    path = Path(sequence_string)
+    
+    if not path.parent.exists():
+        raise ValueError(f"Directory {path.parent} does not exist")
+    
+    file_sequence = FileSequence.match_sequence_string_absolute(sequence_string)
+    
+    if not file_sequence:
+        raise ValueError(f"File sequence {sequence_string} invalid")
+    
+    read_node = nuke.createNode("Read")
+    read_node['file'].setValue(file_sequence.absolute_file_name)
+    read_node['first'].setValue(file_sequence.first_frame)
+    read_node['origfirst'].setValue(file_sequence.first_frame)
+    read_node['last'].setValue(file_sequence.last_frame)
+    read_node['origlast'].setValue(file_sequence.last_frame)
+    
+    return read_node
