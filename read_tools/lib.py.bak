@@ -1,0 +1,298 @@
+
+from pathlib import Path
+from pysequitur import file_sequence, Components, FileSequence
+import nuke
+
+
+class ReadWrapper:
+    def __init__(self, read_node: nuke.nodes.Read):
+        if not read_node.Class() == "Read":
+            raise ValueError("read_node must be a nuke.nodes.Read node")
+        self.read_node = read_node
+        self.file_sequence = file_sequence.FileSequence.match_sequence_string_absolute(
+            self.read_node["file"].getValue(), min_frames=1
+        )
+        if not self.file_sequence:
+            raise ValueError("Failed to parse file sequence from read node")
+
+    def folderize(self) -> "ReadWrapper":
+        """
+        Creates a folder with the same name as the sequence and moves the files into it
+
+        Returns:
+            ReadWrapper: Self for method chaining
+
+        Raises:
+            ValueError: FileSequence not found in this class instance
+        """
+
+        if not self.file_sequence:
+            raise ValueError("No file sequence found")
+
+        self.file_sequence.folderize(self.file_sequence.prefix)
+
+        current_path = Path(self.read_node["file"].getValue())
+        new_path = current_path.parent / self.file_sequence.prefix / current_path.name
+
+        self.read_node["file"].setValue(new_path.as_posix())
+
+        return self
+
+    def delete(self, delete_node=False):
+        """
+        Deletes the files and optionally the node
+
+        Returns:
+            ReadWrapper: Self for method chaining
+
+        Raises:
+            ValueError: FileSequence not found in this class instance
+        """
+
+        if not self.file_sequence:
+            raise ValueError("No file sequence found")
+
+        self.file_sequence.delete_files()
+
+        if delete_node:
+            nuke.delete(self.read_node)
+
+        else:
+            self.read_node["tile_color"].setValue(4278190335)
+
+    def rename(
+        self,
+        name: str | None = None,
+        delimiter: str | None = None,
+        padding: int | None = None,
+        suffix: str | None = None,
+        extension: str | None = None,
+    ) -> "ReadWrapper":
+        """
+        Renames the file sequence and reconnects the node.
+
+        The rename capabilities are derived from the pysequitur library, see docs
+        for more information.
+
+        #TODO add link to pysequitur docs
+
+        Returns:
+            ReadWrapper: Self for method chaining
+
+        Raises:
+            ValueError: _description_
+        """
+
+        if not self.file_sequence:
+            raise ValueError("No file sequence found")
+
+        self.file_sequence.rename_to(
+            Components(
+                prefix=name,
+                delimiter=delimiter,
+                padding=padding,
+                suffix=suffix,
+                extension=extension,
+            )
+        )
+
+        self.read_node["file"].setValue(self.file_sequence.absolute_file_name)
+
+        return self
+
+    def offset(self, offset: int):
+        """
+        Offset the frame numbers in the sequence by the given amount and
+        update the Read node path.
+
+        Args:
+            offset (int): The frame offset to apply (positive or negative)
+            padding (int, optional): New padding for frame numbers
+
+        Returns:
+            ReadWrapper: Self for method chaining
+
+        Raises:
+            ValueError: If FileSequence not found or offset would result in negative frame numbers
+        """
+
+        if not self.file_sequence:
+            raise ValueError("No file sequence found")
+
+        self.file_sequence.offset_frames(offset)
+        self.read_node["file"].setValue(self.file_sequence.absolute_file_name)
+        self.read_node["first"].setValue(self.file_sequence.first_frame)
+        self.read_node["origfirst"].setValue(self.file_sequence.first_frame)
+        self.read_node["last"].setValue(self.file_sequence.last_frame)
+        self.read_node["origlast"].setValue(self.file_sequence.last_frame)
+
+        return self
+
+    def set_first_frame(self, frame: int):
+        """
+        Renames the files in the sequence to start at the given frame number and updates the node.
+
+        Returns:
+            ReadWrapper: Self for method chaining
+
+        Raises:
+            ValueError: If FileSequence not found or offset would result in negative frame numbers
+        """
+
+        if not self.file_sequence:
+            raise ValueError("No file sequence found")
+
+        return self.offset(frame - self.file_sequence.first_frame)
+
+    def copy(
+        self,
+        name: str | None = None,
+        delimiter: str | None = None,
+        padding: int | None = None,
+        suffix: str | None = None,
+        extension: str | None = None,
+        directory: str | None = None,
+        create_directory: bool = False,
+    ):
+        """
+        Creates a copy of the file sequence with the option to specify a new name,
+        and a new directory. Creates a new read node linked to the new sequence.
+
+        The rename capabilities are derived from the pysequitur library, see docs
+        for more information.
+
+        #TODO add link to pysequitur docs
+
+        Returns:
+            ReadWrapper: Self for method chaining
+
+        Raises:
+            ValueError: If FileSequence not found
+        """
+
+        if not self.file_sequence:
+            raise ValueError("No file sequence found")
+
+        if directory is not None:
+            directory = Path(directory)
+            if not directory.exists():
+                if create_directory:
+                    directory.mkdir(parents=True)
+                else:
+                    raise ValueError(f"Directory {directory} does not exist")
+
+        new_seq = self.file_sequence.copy_to(
+            new_name=Components(
+                prefix=name,
+                delimiter=delimiter,
+                padding=padding,
+                suffix=suffix,
+                extension=extension,
+            ),
+            new_directory=directory,
+        )
+
+        return self.__class__.from_path(new_seq.absolute_file_name)
+
+    @property
+    def directory(self):
+        return self.file_sequence.directory
+
+    @property
+    def first_frame(self):
+        return self.file_sequence.first_frame
+
+    @property
+    def last_frame(self):
+        return self.file_sequence.last_frame
+
+    @property
+    def frame_count(self):
+        return self.file_sequence.frame_count
+
+    @property
+    def name(self):
+        return self.file_sequence.prefix
+
+    @property
+    def extension(self):
+        return self.file_sequence.extension
+
+    @property
+    def suffix(self):
+        return self.file_sequence.suffix
+
+    @property
+    def delimiter(self):
+        return self.file_sequence.delimiter
+
+    @classmethod
+    def from_path(cls, abs_path: str) -> "ReadWrapper":
+        """
+        Creates a read node and ReadWrapper from an absolute path to a file sequence.
+
+        Raises:
+            ValueError: the directory does not exist
+            ValueError: the file sequence is invalid
+        Returns:
+            ReadWrapper
+        """
+
+        path = Path(abs_path)
+
+        if not path.parent.exists():
+            raise ValueError(f"Directory {path.parent} does not exist")
+
+        file_sequence = FileSequence.match_sequence_string_absolute(abs_path)
+
+        if not file_sequence:
+            raise ValueError(f"File sequence {abs_path} invalid")
+
+        read_node = nuke.createNode("Read")
+        read_node["file"].setValue(file_sequence.absolute_file_name)
+        read_node["first"].setValue(file_sequence.first_frame)
+        read_node["origfirst"].setValue(file_sequence.first_frame)
+        read_node["last"].setValue(file_sequence.last_frame)
+        read_node["origlast"].setValue(file_sequence.last_frame)
+
+        return cls(read_node)
+
+    @classmethod
+    def from_write(cls, source_node: nuke.Node):
+        """
+        Creates a read node and ReadWrapper from a write node.
+
+        Raises:
+            ValueError: the source node does not have a file knob
+            ValueError: the directory does not exist
+            ValueError: the file sequence is invalid
+
+        Returns:
+            ReadWrapper
+        """
+
+        if not "file" in source_node.knobs():
+            raise ValueError("Source node does not have a file knob")
+
+        return cls.from_path(source_node["file"].getValue())
+
+
+def node_from_sequence_string(sequence_string: str) -> nuke.Node:
+    path = Path(sequence_string)
+
+    if not path.parent.exists():
+        raise ValueError(f"Directory {path.parent} does not exist")
+
+    file_sequence = FileSequence.match_sequence_string_absolute(sequence_string)
+
+    if not file_sequence:
+        raise ValueError(f"File sequence {sequence_string} invalid")
+
+    read_node = nuke.createNode("Read")
+    read_node["file"].setValue(file_sequence.absolute_file_name)
+    read_node["first"].setValue(file_sequence.first_frame)
+    read_node["origfirst"].setValue(file_sequence.first_frame)
+    read_node["last"].setValue(file_sequence.last_frame)
+    read_node["origlast"].setValue(file_sequence.last_frame)
+
+    return read_node
