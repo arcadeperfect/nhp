@@ -21,7 +21,10 @@ class Controller:
         
         if path:
             self._on_directory_selected(path)
-            self._on_scan_requested()         
+            self._on_scan_requested()     
+            
+        self.node_origin = None    
+        self.node_count = 0
 
     def populate_list(self):
         """Populate the table with the directory tree"""
@@ -59,9 +62,15 @@ class Controller:
             return
         
         try:
-            nuke_interface.generate_read_nodes_2(
-                [self.model.ImageFileById[id] for id in id_list]
+            r = nuke_interface.generate_read_nodes_2(
+                [self.model.ImageFileById[id] for id in id_list],
+                self.node_count,
+                self.node_origin 
             )
+            print(r[0])
+            print(r[1])
+            self.node_origin = r[0]
+            self.node_count = r[1]
         except Exception as e:
             self.view.show_error(str(e))
 
