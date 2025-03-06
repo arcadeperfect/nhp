@@ -50,20 +50,16 @@ class Controller:
         except Exception as e:
             self.view.show_error(str(e))
 
-    def _on_load_requested(self, indices: List[int]):
+    def _on_load_requested(self, id_list: List[int]):
         """Handle load request"""
         
         if not self.model._node:
             return
         
         try:
-            # nuke_interface.generate_read_nodes(self.model._node)
-            sequences: List[ImageFile] = [self.model.get_sequence(i) for i in indices]
-
-            nuke_interface.generate_read_nodes_2(sequences)
-
-            # for image_file in sequences:
-            #     ReadWrapper.from_image_file(image_file)
+            nuke_interface.generate_read_nodes_2(
+                [self.model.ImageFileById[id] for id in id_list]
+            )
         except Exception as e:
             self.view.show_error(str(e))
 

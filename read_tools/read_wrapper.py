@@ -8,8 +8,11 @@ import nuke
 class ImageFile(ABC):
     """Base class for handling image files (both sequences and single images)"""
 
+    def __init__(self, id: Optional[int] = None):
+            self.id = id
+
     @staticmethod
-    def from_path(path: Path) -> "MovieFile| SequenceFile | SingleFile":
+    def from_path(path: Path, id = None) -> "MovieFile| SequenceFile | SingleFile":
         """Factory method to create appropriate handler"""
 
         extension = Path(path).suffix.lstrip(".").lower()
@@ -19,7 +22,7 @@ class ImageFile(ABC):
             return MovieFile(Path(path))
 
         try:
-            sequence = FileSequence.match_sequence_string_absolute(path, min_frames=1)
+            sequence = FileSequence.match_sequence_string_absolute(str(path), min_frames=1)
             if sequence:
                 return SequenceFile(sequence)
             return SingleFile(Path(path))
@@ -27,12 +30,14 @@ class ImageFile(ABC):
             return SingleFile(Path(path))
 
     @staticmethod
-    def from_file_sequence(file_sequence: FileSequence):
-        return SequenceFile(file_sequence)
+    def from_file_sequence(file_seq: FileSequence, id: Optional[int] = None):
+        sequence_file = SequenceFile(file_seq)
+        sequence_file.id = id
+        return sequence_file
 
     @abstractmethod
-    def get_path(self) -> str:
-        """Return the path as a string."""
+    def get_path(self) -> Path:
+        """Return the path as a Path."""
         pass
 
     @abstractmethod
@@ -129,8 +134,8 @@ class SequenceFile(ImageFile):
     def __init__(self, sequence: FileSequence):
         self.sequence = sequence
 
-    def get_path(self) -> str:
-        return self.sequence.absolute_file_name
+    def get_path(self) -> Path:
+        return Path(self.sequence.absolute_file_name)
 
     def get_user_text(self) -> str:
         return f"{self.sequence.absolute_file_name} {self.sequence.first_frame}-{self.sequence.last_frame}"
@@ -209,8 +214,8 @@ class SingleFile(ImageFile):
         if not path.exists():
             raise ValueError(f"File {path} does not exist")
 
-    def get_path(self) -> str:
-        return str(self.path)
+    def get_path(self) -> Path:
+        return self.path
 
     def get_user_text(self) -> str:
         return str(self.path)
@@ -381,7 +386,7 @@ class ReadWrapper:
         if not path.parent.exists():
             raise ValueError(f"Directory {path.parent} does not exist")
 
-        handler = ImageFile.from_path(abs_path)
+        handler = ImageFile.from_path(path)
 
         read_node = nuke.createNode("Read")  # type: ignore
         read_node["file"].fromUserText(handler.get_user_text())

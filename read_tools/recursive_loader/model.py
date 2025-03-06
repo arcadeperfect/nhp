@@ -65,23 +65,45 @@ class Model:
         self._ImageFiles: List[ImageFile] = []
         self._current_directory: Optional[Path] = None
         self._node: Optional[Node] = None
+        self._display_order: List[ImageFile] = []  #
+        self.ImageFileById: dict[int, ImageFile] = {}
 
     def scan_directory(self, directory: Path) -> None:
         """Scan directory for sequences"""
         self._current_directory = directory
         self._ImageFiles.clear()
+        self._display_order.clear()
         
         root_node = pysequitur.crawl.recursive_scan(directory)
         crawl.visualize_tree(root_node)
         
+        id = 0
+        
+        # First collect all files
         for results in crawl.traverse_nodes(root_node):
             for sequence in results.sequences:
-                self._ImageFiles.append(ImageFile.from_file_sequence(sequence))
+                image_file = ImageFile.from_file_sequence(sequence)
+                image_file.id = id
+                self._ImageFiles.append(image_file)
+                self.ImageFileById[id] = image_file
+                id += 1
             for movie in results.movs:
-                self._ImageFiles.append(ImageFile.from_path(movie))
+                image_file = ImageFile.from_path(movie)
+                image_file.id = id
+                self._ImageFiles.append(image_file)
+                self.ImageFileById[id] = image_file
+                id += 1
+                # self._ImageFiles.append(ImageFile.from_path(movie))
             for rogue in results.rogues:
-                self._ImageFiles.append(ImageFile.from_path(rogue))
+                image_file = ImageFile.from_path(rogue)
+                image_file.id = id
+                self._ImageFiles.append(image_file)
+                self.ImageFileById[id] = image_file
+                id += 1
+                # self._ImageFiles.append(ImageFile.from_path(rogue))
             
+        # Then sort them by directory to match display order
+        self._display_order = sorted(self._ImageFiles, key=lambda x: str(x.get_path()))
         self._node = root_node
 
     def build_directory_tree(self) -> Optional[DirectoryTree]:
@@ -92,11 +114,11 @@ class Model:
 
     def get_sequence(self, index: int) -> ImageFile:
         """Get sequence at specific index"""
-        return self._ImageFiles[index]
+        return self._display_order[index]
     
     def get_all_sequences(self) -> List[ImageFile]:
-        """Get all found sequences"""
-        return self._ImageFiles
+        """Get all found sequences in display order"""
+        return self._display_order
         
     def clear(self) -> None:
         """Clear all sequences"""

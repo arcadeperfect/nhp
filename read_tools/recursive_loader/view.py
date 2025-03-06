@@ -1,13 +1,12 @@
 from PySide2 import QtWidgets, QtCore, QtGui
 from PySide2.QtCore import Signal
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 from nhp.read_tools.read_wrapper import ImageFile
 from .model import DirectoryTree
 
 class TreePresenter:
-    """Handles the presentation logic for the directory tree"""
     
     def __init__(self, view: 'View'):
         self.view = view
@@ -26,6 +25,7 @@ class TreePresenter:
                 "",  # type
                 "",  # range
                 "",  # path
+                -1,
                 selectable=False
             )
         
@@ -45,12 +45,16 @@ class TreePresenter:
             is_last_file = i == len(node.files) - 1
             file_prefix = new_prefix + ("└── " if is_last_file else "├── ")
             
+            if file.id is None:
+                raise ValueError(f"File {file.name} has no id")
+            
             self.view.add_row(
                 f"{file_prefix}[{file.extension.upper()}]",
                 file.name,
                 file.extension.upper(),
                 self._get_frame_range(file),
-                str(file.get_path())
+                str(file.get_path()),
+                file.id
             )
 
     @staticmethod
@@ -89,6 +93,8 @@ class View(QtWidgets.QWidget):
     load_requested = Signal(list)
     cancel_requested = Signal()
     select_all_requested = Signal()
+
+    
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -182,6 +188,9 @@ class View(QtWidgets.QWidget):
 
         # Set minimum size
         self.setMinimumSize(1400, 800)
+        
+        self.__row_counter = 0
+        self.id_lookup: dict[int, int] = {}
 
     def _on_browse_clicked(self):
         """Handle browse button click"""
@@ -201,27 +210,14 @@ class View(QtWidgets.QWidget):
 
     def _on_load_clicked(self):
         """Handle load button click"""
-        selected = self.get_selected_indices()
-        if selected:
-            self.load_requested.emit(selected)
+        # selected = self.get_selected_indices()
+        # if selected:
+        #     self.load_requested.emit(selected)
+        self.load_requested.emit(self.get_selected_ids())
 
     def _on_cancel_clicked(self):
         """Handle cancel button click"""
         self.cancel_requested.emit()
-
-    def get_selected_indices(self) -> List[int]:
-        """Get indices of selected items that correspond to image files"""
-        selected_indices = []
-        sequence_index = 0
-
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item.flags() & QtCore.Qt.ItemIsSelectable:  # Skip directory items
-                if self.table.isItemSelected(item):
-                    selected_indices.append(sequence_index)
-                sequence_index += 1
-
-        return selected_indices
 
     def clear_list(self):
         """Clear the table"""
@@ -234,6 +230,7 @@ class View(QtWidgets.QWidget):
         type: str,
         range: str,
         path: str,
+        id: int,
         selectable: bool = True,
     ):
         """Add a row to the table"""
@@ -255,6 +252,11 @@ class View(QtWidgets.QWidget):
             if not selectable:
                 item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
             self.table.setItem(row, col, item)
+        
+        
+        if id != -1:
+            self.id_lookup[self.__row_counter] = id
+        self.__row_counter += 1
 
     def set_path_text(self, path: str):
         """Set the path display text"""
@@ -276,3 +278,33 @@ class View(QtWidgets.QWidget):
     def select_all(self):
         """Select all selectable items"""
         self.table.selectAll()
+
+    def get_selected_indeces(self) -> List[int]:
+            """Get indices of selected rows"""
+            selected_ranges = self.table.selectedRanges()
+            selected_rows = set()
+            for range_ in selected_ranges:
+                for row in range(range_.topRow(), range_.bottomRow() + 1):
+                    # Check if the item in the first column is selectable
+                    item = self.table.item(row, 0)
+                    if item and item.flags() & QtCore.Qt.ItemIsSelectable:
+                        selected_rows.add(row)
+            return list(selected_rows)
+
+    def get_selected_ids(self) -> List[int]:
+        
+        # print("--------------------------------")
+        # print("key values")
+        # # print(self.id_lookup)
+        # for key, value in self.id_lookup.items():
+        #     print(f"key: {key}, value: {value}")
+        
+        # print("---------------")
+        # print("selected indeces")
+        # print(self.get_selected_indeces())
+        
+        # for s in self.get_selected_indeces():
+        #     print(self.id_lookup[s])
+            
+            
+        return [self.id_lookup[s] for s in self.get_selected_indeces()]
