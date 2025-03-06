@@ -40,6 +40,8 @@ class Controller:
         self.view.clear_list()
         self.view.set_path_text(str(directory))
         self.model._current_directory = directory
+        # self.view.__row_counter = 0
+        self.view.id_lookup = {}
 
     def _on_scan_requested(self):
         """Handle scan request"""

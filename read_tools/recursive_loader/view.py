@@ -7,6 +7,8 @@ from nhp.read_tools.read_wrapper import ImageFile
 from .model import DirectoryTree
 import nuke
 
+ID_ROLE = QtCore.Qt.UserRole + 1
+
 class TreePresenter:
     
     def __init__(self, view: 'View'):
@@ -190,7 +192,7 @@ class View(QtWidgets.QWidget):
         # Set minimum size
         self.setMinimumSize(1400, 800)
         
-        self.__row_counter = 0
+        # self.__row_counter = 0
         self.id_lookup: dict[int, int] = {}
 
     def _on_browse_clicked(self):
@@ -265,11 +267,14 @@ class View(QtWidgets.QWidget):
             if not selectable:
                 item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
             self.table.setItem(row, col, item)
+            if col == 0:
+                item.setData(ID_ROLE, id)
+            self.table.setItem(row, col, item)
         
         
-        if id != -1:
-            self.id_lookup[self.__row_counter] = id
-        self.__row_counter += 1
+        # if id != -1:
+        #     self.id_lookup[self.__row_counter] = id
+        # self.__row_counter += 1
 
     def set_path_text(self, path: str):
         """Set the path display text"""
@@ -305,19 +310,6 @@ class View(QtWidgets.QWidget):
             return list(selected_rows)
 
     def get_selected_ids(self) -> List[int]:
-        
-        # print("--------------------------------")
-        # print("key values")
-        # # print(self.id_lookup)
-        # for key, value in self.id_lookup.items():
-        #     print(f"key: {key}, value: {value}")
-        
-        # print("---------------")
-        # print("selected indeces")
-        # print(self.get_selected_indeces())
-        
-        # for s in self.get_selected_indeces():
-        #     print(self.id_lookup[s])
-            
-            
-        return [self.id_lookup[s] for s in self.get_selected_indeces()]
+        """Get IDs of selected rows"""
+        selected_rows = self.get_selected_indeces()
+        return [self.table.item(row, 0).data(ID_ROLE) for row in selected_rows]
