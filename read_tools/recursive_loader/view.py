@@ -5,6 +5,7 @@ from typing import List, Optional
 from dataclasses import dataclass
 from nhp.read_tools.read_wrapper import ImageFile
 from .model import DirectoryTree
+import nuke
 
 class TreePresenter:
     
@@ -194,11 +195,23 @@ class View(QtWidgets.QWidget):
 
     def _on_browse_clicked(self):
         """Handle browse button click"""
-        directory = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select Directory", str(Path.home())
-        )
+        directory = Path(nuke.getFilename("Select Directory"))
+        
+        if directory.is_dir():
+            if not directory.exists():
+                return
+        else:
+            directory = directory.parent
+            if not directory.exists():
+                return
+        
         if directory:
-            self.directory_selected.emit(Path(directory))
+            self.directory_selected.emit(directory)
+        # directory = QtWidgets.QFileDialog.getExistingDirectory(
+        #     self, "Select Directory", str(Path.home())
+        # )
+        # if directory:
+        #     self.directory_selected.emit(Path(directory))
 
     def _on_scan_clicked(self):
         """Handle scan button click"""
