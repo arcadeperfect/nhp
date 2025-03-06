@@ -3,6 +3,8 @@ from PySide2.QtCore import Signal, Qt, QSize
 from pathlib import Path
 from typing import List
 
+from nhp.read_tools.recursive_loader import widgets
+
 
 class View(QtWidgets.QWidget):
     # Signals
@@ -10,85 +12,138 @@ class View(QtWidgets.QWidget):
     load_requested = Signal(list)  # Emitted with list of selected indices
     cancel_requested = Signal()  # Emitted when cancel is clicked
     scan_requested = Signal()  # Emitted when scan is clicked
+    select_all_requested = Signal()  # Emitted when select all is clicked
+    deselect_all_requested = Signal()  # Emitted when deselect all is clicked
 
-    def __init__(self):
-        super().__init__()
-        print("init view")
-        self.setup_ui()
-
-    def setup_ui(self):
-        self.setWindowTitle("Recursive Loader")
-        self.setMinimumSize(QSize(1400, 600))
-
-        # Create widgets
-        self.create_widgets()
-
-        # Create layouts
-        self.create_layouts()
-
-        # Setup layouts
-        self.setup_layouts()
-
-        # Connect signals
-        self.connect_signals()
-
-        # Set window flags
-        self.setWindowFlags(Qt.Window)
-
-    def create_widgets(self):
-        # Browse button
-        self.button_browse = QtWidgets.QPushButton("Browse...")
-        self.button_browse.setMaximumWidth(100)
-
-        # Path display
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sequence Loader")
+        
+        # Create main layout
+        main_layout = QtWidgets.QVBoxLayout(self)
+        
+        # Create path selection layout
+        path_layout = QtWidgets.QHBoxLayout()
         self.line_edit_path = QtWidgets.QLineEdit()
-        self.line_edit_path.setPlaceholderText("Path to search")
-
-        # List widget for showing found sequences
-        self.list_sequences = QtWidgets.QListWidget()
-        # self.list_sequences.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
-        self.list_sequences.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
-
-        # Bottom buttons
-        self.button_load = QtWidgets.QPushButton("Load Selected")
-        self.button_cancel = QtWidgets.QPushButton("Cancel")
+        self.button_browse = QtWidgets.QPushButton("Browse")
         self.button_scan = QtWidgets.QPushButton("Scan")
-
-    def create_layouts(self):
-        # Main layout
-        self.layout_main = QtWidgets.QVBoxLayout()
-
-        # Path selection layout
-        self.layout_path = QtWidgets.QHBoxLayout()
-
-        # Buttons layout
-        self.layout_buttons = QtWidgets.QHBoxLayout()
-
-    def setup_layouts(self):
-        # Setup path selection layout
-        self.layout_path.addWidget(self.line_edit_path)
-        self.layout_path.addWidget(self.button_browse)
-
-        # Setup buttons layout
-        self.layout_buttons.addWidget(self.button_scan)
-        self.layout_buttons.addStretch()
-        self.layout_buttons.addWidget(self.button_load)
-        self.layout_buttons.addWidget(self.button_cancel)
-
-        # Setup main layout
-        self.layout_main.addLayout(self.layout_path)
-        self.layout_main.addWidget(self.list_sequences)
-        self.layout_main.addLayout(self.layout_buttons)
-
-        # Set the main layout
-        self.setLayout(self.layout_main)
-
-    def connect_signals(self):
-        """Connect internal signals"""
+        
+        path_layout.addWidget(self.line_edit_path)
+        path_layout.addWidget(self.button_browse)
+        path_layout.addWidget(self.button_scan)
+        
+        # Create list widget
+        self.list_sequences = QtWidgets.QListWidget()
+        self.list_sequences.setSelectionMode(QtWidgets.QListWidget.ExtendedSelection)
+        
+        # Create button layout
+        button_layout = QtWidgets.QHBoxLayout()
+        self.button_select_all = QtWidgets.QPushButton("Select All")
+        self.button_deselect_all = QtWidgets.QPushButton("Deselect All")
+        self.button_load = QtWidgets.QPushButton("Load")
+        self.button_cancel = QtWidgets.QPushButton("Cancel")
+        
+        
+        button_layout.addWidget(self.button_select_all)
+        button_layout.addWidget(self.button_deselect_all)
+        button_layout.addStretch()  # This pushes Load and Cancel to the right
+        button_layout.addWidget(self.button_load)
+        button_layout.addWidget(self.button_cancel)
+        
+        # Add all layouts to main layout
+        main_layout.addLayout(path_layout)
+        main_layout.addWidget(self.list_sequences)
+        main_layout.addLayout(button_layout)
+        
+        # Connect signals
         self.button_browse.clicked.connect(self._on_browse_clicked)
+        self.button_scan.clicked.connect(self._on_scan_clicked)
+        self.button_select_all.clicked.connect(self._on_select_all_clicked)
+        self.button_deselect_all.clicked.connect(self._on_deselect_all_clicked)
         self.button_load.clicked.connect(self._on_load_clicked)
         self.button_cancel.clicked.connect(self._on_cancel_clicked)
-        self.button_scan.clicked.connect(self._on_scan_clicked)
+        
+        # Set minimum size
+        self.setMinimumSize(1400, 800)
+
+    # def __init__(self):
+    #     super().__init__()
+    #     print("init view")
+    #     self.setup_ui()
+
+    # def setup_ui(self):
+    #     self.setWindowTitle("Recursive Loader")
+    #     self.setMinimumSize(QSize(1400, 600))
+
+    #     # Create widgets
+    #     self.create_widgets()
+
+    #     # Create layouts
+    #     self.create_layouts()
+
+    #     # Setup layouts
+    #     self.setup_layouts()
+
+    #     # Connect signals
+    #     self.connect_signals()
+
+    #     # Set window flags
+    #     self.setWindowFlags(Qt.Window)
+
+    # def create_widgets(self):
+    #     # Browse button
+    #     self.button_browse = QtWidgets.QPushButton("Browse...")
+    #     self.button_browse.setMaximumWidth(100)
+
+    #     # Path display
+    #     self.line_edit_path = QtWidgets.QLineEdit()
+    #     self.line_edit_path.setPlaceholderText("Path to search")
+
+    #     # List widget for showing found sequences
+    #     self.list_sequences = QtWidgets.QListWidget()
+    #     # self.list_sequences.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+    #     self.list_sequences.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+
+    #     # Bottom buttons
+    #     self.button_load = QtWidgets.QPushButton("Load Selected")
+    #     self.button_cancel = QtWidgets.QPushButton("Cancel")
+    #     self.button_scan = QtWidgets.QPushButton("Scan")
+
+    # def create_layouts(self):
+    #     # Main layout
+    #     self.layout_main = QtWidgets.QVBoxLayout()
+
+    #     # Path selection layout
+    #     self.layout_path = QtWidgets.QHBoxLayout()
+
+    #     # Buttons layout
+    #     self.layout_buttons = QtWidgets.QHBoxLayout()
+
+    # def setup_layouts(self):
+    #     # Setup path selection layout
+    #     self.layout_path.addWidget(self.line_edit_path)
+    #     self.layout_path.addWidget(self.button_browse)
+
+    #     # Setup buttons layout
+    #     self.layout_buttons.addWidget(self.button_scan)
+    #     self.layout_buttons.addStretch()
+    #     self.layout_buttons.addWidget(self.button_load)
+    #     self.layout_buttons.addWidget(self.button_cancel)
+
+    #     # Setup main layout
+    #     self.layout_main.addLayout(self.layout_path)
+    #     self.layout_main.addWidget(self.list_sequences)
+    #     self.layout_main.addLayout(self.layout_buttons)
+
+    #     # Set the main layout
+    #     self.setLayout(self.layout_main)
+
+    # def connect_signals(self):
+    #     """Connect internal signals"""
+    #     self.button_browse.clicked.connect(self._on_browse_clicked)
+    #     self.button_load.clicked.connect(self._on_load_clicked)
+    #     self.button_cancel.clicked.connect(self._on_cancel_clicked)
+    #     self.button_scan.clicked.connect(self._on_scan_clicked)
 
     def _on_scan_clicked(self):
         """Handle scan button click"""
@@ -117,21 +172,33 @@ class View(QtWidgets.QWidget):
         """Handle cancel button click"""
         self.cancel_requested.emit()
 
-    def get_selected_indices(self) -> List[int]:
-        """Get indices of selected items"""
-        # selected = []
-        # for i in range(self.list_sequences.count()):
-        #     item = self.list_sequences.item(i)
-        #     widget = self.list_sequences.itemWidget(item)
-        #     if widget.is_selected:
-        #         selected.append(i)
-        # return selected
+    def _on_select_all_clicked(self):
+        """Handle select all button click"""
+        self.select_all_requested.emit()
 
-        return [
-            i
-            for i in range(self.list_sequences.count())
-            if self.list_sequences.item(i).isSelected()
-        ]
+    def _on_deselect_all_clicked(self):
+        """Handle deselect all button click"""
+        self.deselect_all_requested.emit()
+
+    def get_selected_indices(self) -> List[int]:
+        """Get indices of selected items that correspond to image files"""
+        image_file_index = 0  # Counter for actual image files
+        selected_indices = []
+        
+        for i in range(self.list_sequences.count()):
+            item = self.list_sequences.item(i)
+            widget = self.list_sequences.itemWidget(item)
+            
+            # Skip directory items
+            if isinstance(widget, widgets.DirectoryListItem):
+                continue
+                
+            if item.isSelected():
+                selected_indices.append(image_file_index)
+                
+            image_file_index += 1
+            
+        return selected_indices
 
     def clear_list(self):
         """Clear all items from list"""
@@ -159,3 +226,11 @@ class View(QtWidgets.QWidget):
         # item = QtWidgets.QListWidgetItem(self.list_sequences)
         # item.setSizeHint(QSize(0, 80))
         # self.list_sequences.setItemWidget(item, widget)
+
+    def select_all(self):
+        """Select all items"""
+        self.list_sequences.selectAll()
+
+    def deselect_all(self):
+        """Deselect all items"""
+        self.list_sequences.clearSelection()
