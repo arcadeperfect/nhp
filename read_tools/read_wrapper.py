@@ -9,7 +9,7 @@ class ImageFile(ABC):
     """Base class for handling image files (both sequences and single images)"""
 
     @staticmethod
-    def from_path(path: str) -> "MovieFile| SequenceFile | SingleFile":
+    def from_path(path: Path) -> "MovieFile| SequenceFile | SingleFile":
         """Factory method to create appropriate handler"""
 
         extension = Path(path).suffix.lstrip(".").lower()

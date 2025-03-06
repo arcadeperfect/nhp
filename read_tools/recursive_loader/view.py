@@ -1,41 +1,72 @@
 from PySide2 import QtWidgets, QtCore, QtGui
-
-# from PySide2 import QtWidgets
 from PySide2.QtCore import Signal
 from pathlib import Path
 from typing import List
+from dataclasses import dataclass
+from nhp.read_tools.read_wrapper import ImageFile
+from .model import DirectoryTree
 
+class TreePresenter:
+    """Handles the presentation logic for the directory tree"""
+    
+    def __init__(self, view: 'View'):
+        self.view = view
 
-class SynchronizedListWidget(QtWidgets.QListWidget):
-    """Custom QListWidget that syncs its scrolling with others"""
+    def display_tree(self, tree: DirectoryTree) -> None:
+        """Display the directory tree in the view"""
+        self._display_node(tree)
 
-    def __init__(self, sync_lists=None, parent=None, selectable=False):
-        super().__init__(parent)
-        self.sync_lists = sync_lists or []
+    def _display_node(self, node: DirectoryTree, prefix: str = "", is_last: bool = True) -> None:
+        """Recursively display a node and its children"""
+        # Skip displaying root directory
+        if node.name:
+            self.view.add_row(
+                self._format_directory(prefix, is_last, node.name),
+                "",  # name
+                "",  # type
+                "",  # range
+                "",  # path
+                selectable=False
+            )
+        
+        # Create new prefix for children
+        new_prefix = prefix
+        if node.name:  # Not for root
+            new_prefix = prefix + ("    " if is_last else "│   ")
+        
+        # Process subdirectories first
+        for i, subdir in enumerate(sorted(node.subdirs, key=lambda x: x.name)):
+            is_last_dir = i == len(node.subdirs) - 1
+            is_last_item = is_last_dir and not node.files
+            self._display_node(subdir, new_prefix, is_last_item)
+        
+        # Then process files
+        for i, file in enumerate(node.files):
+            is_last_file = i == len(node.files) - 1
+            file_prefix = new_prefix + ("└── " if is_last_file else "├── ")
+            
+            self.view.add_row(
+                f"{file_prefix}[{file.extension.upper()}]",
+                file.name,
+                file.extension.upper(),
+                self._get_frame_range(file),
+                str(file.get_path())
+            )
 
-        # Configure selection
-        if selectable:
-            self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+    @staticmethod
+    def _format_directory(prefix: str, is_last: bool, name: str) -> str:
+        """Format a directory name with the appropriate prefix"""
+        return f"{prefix}{'└── ' if is_last else '├── '}{name}/"
+
+    @staticmethod
+    def _get_frame_range(file: ImageFile) -> str:
+        """Get frame range string for an image file"""
+        if file.frame_count > 1:
+            return f"{file.first_frame()}-{file.last_frame()}"
+        elif file.frame_count == -1:
+            return "Unknown"
         else:
-            self.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
-
-        font = QtGui.QFont("Courier")  # or try "Menlo" or "Monaco" on Mac
-        font.setStyleHint(QtGui.QFont.Monospace)
-        self.setFont(font)
-
-        # Sync scrolling
-        self.verticalScrollBar().valueChanged.connect(self._sync_scroll)
-
-    def add_sync_list(self, list_widget):
-        """Add a list to sync with"""
-        if list_widget not in self.sync_lists:
-            self.sync_lists.append(list_widget)
-
-    def _sync_scroll(self, value):
-        """Sync scroll position with other lists"""
-        for lst in self.sync_lists:
-            if lst.verticalScrollBar().value() != value:
-                lst.verticalScrollBar().setValue(value)
+            return "Single Frame"
 
 
 class NoMarginDelegate(QtWidgets.QStyledItemDelegate):
@@ -49,6 +80,8 @@ class NoMarginDelegate(QtWidgets.QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
+
+
 class View(QtWidgets.QWidget):
     # Signals
     directory_selected = Signal(Path)
@@ -60,6 +93,7 @@ class View(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sequence Loader")
+        self.tree_presenter = TreePresenter(self)
 
         # Create main layout
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -117,11 +151,11 @@ class View(QtWidgets.QWidget):
         header.setSectionResizeMode(2, QtWidgets.QHeaderView.Interactive)
 
         # Set initial column widths
-        self.table.setColumnWidth(0, 400)  # Name column gets more space initially
-        self.table.setColumnWidth(1, 100)  # Type column
-        self.table.setColumnWidth(2, 100)  # Range column
-        self.table.setColumnWidth(3, 100)  # Path column
-        self.table.setColumnWidth(4, 500)  # Path column
+        self.table.setColumnWidth(0, 400)  # Tree
+        self.table.setColumnWidth(1, 200)  # Name
+        self.table.setColumnWidth(2, 50)  # Type
+        self.table.setColumnWidth(3, 100)  # Range
+        self.table.setColumnWidth(4, 500)  # Path
         
         # Create button layout
         button_layout = QtWidgets.QHBoxLayout()
