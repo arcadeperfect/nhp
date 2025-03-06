@@ -101,17 +101,12 @@ class Controller:
         def display_tree(node, prefix="", is_last=True):
             # Skip displaying root directory
             if node.name:
-                dir_item_name = QtWidgets.QListWidgetItem(f"{prefix}{'└── ' if is_last else '├── '}{node.name}/")
-                dir_item_type = QtWidgets.QListWidgetItem("")
-                dir_item_range = QtWidgets.QListWidgetItem("")
-                
-                # Make directory items non-selectable
-                for item in [dir_item_name, dir_item_type, dir_item_range]:
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
-                
-                self.view.list_names.addItem(dir_item_name)
-                self.view.list_types.addItem(dir_item_type)
-                self.view.list_ranges.addItem(dir_item_range)
+                self.view.add_row(
+                    f"{prefix}{'└── ' if is_last else '├── '}{node.name}/",
+                    "",
+                    "",
+                    selectable=False
+                )
             
             # Create new prefix for children
             new_prefix = prefix
@@ -129,11 +124,12 @@ class Controller:
                 is_last_file = i == len(node.files) - 1
                 file_prefix = new_prefix + ("└── " if is_last_file else "├── ")
                 
-                file_name = f"{file_prefix}[{file.extension.upper()}] {file.name}"
-                
-                self.view.list_names.addItem(file_name)
-                self.view.list_types.addItem(file.extension.upper())
-                self.view.list_ranges.addItem(self.get_frame_range(file))
+                self.view.add_row(
+                    f"{file_prefix}[{file.extension.upper()}] {file.name}",
+                    file.extension.upper(),
+                    self.get_frame_range(file)
+                )   
+        
         
         # Start display from root
         display_tree(root)

@@ -35,6 +35,11 @@ class SynchronizedListWidget(QtWidgets.QListWidget):
             if lst.verticalScrollBar().value() != value:
                 lst.verticalScrollBar().setValue(value)
 
+class NoMarginDelegate(QtWidgets.QStyledItemDelegate):
+    def paint(self, painter: QtGui.QPainter, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex):
+        option.rect.adjust(0, 0, 0, 0)  # Remove any margin
+        super().paint(painter, option, index)
+
 class View(QtWidgets.QWidget):
     # Signals
     directory_selected = Signal(Path)
@@ -42,6 +47,7 @@ class View(QtWidgets.QWidget):
     load_requested = Signal(list)
     cancel_requested = Signal()
     select_all_requested = Signal()
+    
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,47 +66,50 @@ class View(QtWidgets.QWidget):
         path_layout.addWidget(self.button_browse)
         path_layout.addWidget(self.button_scan)
         
-        # Create lists layout
-        lists_layout = QtWidgets.QHBoxLayout()
+        # Create table widget
+        self.table = QtWidgets.QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["Name", "Type", "Range"])
         
-        # Create synchronized lists
-        self.list_names = SynchronizedListWidget(selectable=True)  # Only names list is selectable
-        self.list_types = SynchronizedListWidget(selectable=False)
-        self.list_ranges = SynchronizedListWidget(selectable=False)
+        # Configure table properties
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(False)
         
-        # Set up sync relationships
-        self.list_names.add_sync_list(self.list_types)
-        self.list_names.add_sync_list(self.list_ranges)
-        self.list_types.add_sync_list(self.list_names)
-        self.list_types.add_sync_list(self.list_ranges)
-        self.list_ranges.add_sync_list(self.list_names)
-        self.list_ranges.add_sync_list(self.list_types)
+        # Set custom delegate to remove margins
+        delegate = NoMarginDelegate(self.table)
+        self.table.setItemDelegate(delegate)
         
-        # Set headers
-        name_header = QtWidgets.QLabel("Name")
-        type_header = QtWidgets.QLabel("Type")
-        range_header = QtWidgets.QLabel("Range")
+        # Set spacing and margins
+        self.table.setContentsMargins(0, 0, 0, 0)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: transparent;
+                spacing: 0px;
+            }
+            QTableWidget::item {
+                padding: 0px;
+                margin: 0px;
+                border: none;
+            }
+        """)
         
-        # Create column layouts
-        name_layout = QtWidgets.QVBoxLayout()
-        type_layout = QtWidgets.QVBoxLayout()
-        range_layout = QtWidgets.QVBoxLayout()
+        # Adjust row height
+        self.table.verticalHeader().setDefaultSectionSize(20)  # Compact rows
         
-        name_layout.addWidget(name_header)
-        name_layout.addWidget(self.list_names)
-        type_layout.addWidget(type_header)
-        type_layout.addWidget(self.list_types)
-        range_layout.addWidget(range_header)
-        range_layout.addWidget(self.list_ranges)
+        # Set font
+        font = QtGui.QFont("Courier")
+        font.setStyleHint(QtGui.QFont.Monospace)
+        self.table.setFont(font)
         
-        # Set column widths
-        self.list_names.setMinimumWidth(300)
-        self.list_types.setFixedWidth(100)
-        self.list_ranges.setFixedWidth(100)
-        
-        lists_layout.addLayout(name_layout)
-        lists_layout.addLayout(type_layout)
-        lists_layout.addLayout(range_layout)
+        # Set column stretch
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.Fixed)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.Fixed)
+        self.table.setColumnWidth(1, 100)
+        self.table.setColumnWidth(2, 100)
         
         # Create button layout
         button_layout = QtWidgets.QHBoxLayout()
@@ -115,7 +124,7 @@ class View(QtWidgets.QWidget):
         
         # Add all layouts to main layout
         main_layout.addLayout(path_layout)
-        main_layout.addLayout(lists_layout)
+        main_layout.addWidget(self.table)
         main_layout.addLayout(button_layout)
         
         # Connect signals
@@ -159,20 +168,37 @@ class View(QtWidgets.QWidget):
         selected_indices = []
         sequence_index = 0
         
-        for i in range(self.list_names.count()):
-            item = self.list_names.item(i)
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
             if item.flags() & QtCore.Qt.ItemIsSelectable:  # Skip directory items
-                if item.isSelected():
+                if self.table.isItemSelected(item):
                     selected_indices.append(sequence_index)
                 sequence_index += 1
                 
         return selected_indices
 
     def clear_list(self):
-        """Clear all lists"""
-        self.list_names.clear()
-        self.list_types.clear()
-        self.list_ranges.clear()
+        """Clear the table"""
+        self.table.setRowCount(0)
+
+    def add_row(self, name: str, type: str, range: str, selectable: bool = True):
+        """Add a row to the table"""
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        
+        # Replace regular spaces with figure spaces for exact width control
+        name = name.replace(" ", "\u2007")
+        
+        items = [
+            QtWidgets.QTableWidgetItem(name),
+            QtWidgets.QTableWidgetItem(type),
+            QtWidgets.QTableWidgetItem(range)
+        ]
+    
+        for col, item in enumerate(items):
+            if not selectable:
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
+            self.table.setItem(row, col, item)
 
     def set_path_text(self, path: str):
         """Set the path display text"""
@@ -193,4 +219,4 @@ class View(QtWidgets.QWidget):
 
     def select_all(self):
         """Select all selectable items"""
-        self.list_names.selectAll()
+        self.table.selectAll()
