@@ -22,7 +22,7 @@ class Model:
         root_node = pysequitur.crawl.recursive_scan(directory)
         # return
         
-        # crawl.visualize_tree(results)
+        crawl.visualize_tree(root_node)
         
         for results in crawl.traverse_nodes(root_node):
             for sequence in results.sequences:
