@@ -59,34 +59,73 @@ class Controller:
 
     #         self.view.list_sequences.addItem(list_item)
     #         self.view.list_sequences.setItemWidget(list_item, custom_widget)
+    # def populate_list(self):
+    #     """Populate the list with the sequences"""
+    #     self.view.clear_list()
+        
+    #     current_dir = None
+    #     for image_file in self.model._ImageFiles:
+    #         # If we encounter a new directory, add a directory item
+    #         if current_dir != image_file.directory:
+    #             current_dir = image_file.directory
+    #             list_item = QtWidgets.QListWidgetItem()
+    #             list_item.setFlags(list_item.flags() & ~QtCore.Qt.ItemIsSelectable)  # Make non-selectable
+    #             dir_widget = widgets.DirectoryListItem()
+    #             dir_widget.set_data(str(current_dir))
+    #             list_item.setSizeHint(dir_widget.sizeHint())
+    #             self.view.list_sequences.addItem(list_item)
+    #             self.view.list_sequences.setItemWidget(list_item, dir_widget)
+            
+    #         # Add the sequence item
+    #         list_item = QtWidgets.QListWidgetItem()
+    #         custom_widget = widgets.CustomListItem()
+    #         custom_widget.set_data(
+    #             name=image_file.name,
+    #             type=image_file.extension.upper(),
+    #             range=self.get_frame_range(image_file),
+    #         )
+    #         list_item.setSizeHint(custom_widget.sizeHint())
+    #         self.view.list_sequences.addItem(list_item)
+    #         self.view.list_sequences.setItemWidget(list_item, custom_widget)
+
     def populate_list(self):
-        """Populate the list with the sequences"""
+        """Populate the list with the sequences grouped by directory"""
         self.view.clear_list()
         
+        base_dir = self.model.current_directory
+        if not base_dir:
+            return
+            
         current_dir = None
         for image_file in self.model._ImageFiles:
+            # Calculate relative path and depth
+            rel_path = image_file.directory.relative_to(base_dir)
+            depth = len(rel_path.parts)
+            
             # If we encounter a new directory, add a directory item
             if current_dir != image_file.directory:
                 current_dir = image_file.directory
                 list_item = QtWidgets.QListWidgetItem()
-                list_item.setFlags(list_item.flags() & ~QtCore.Qt.ItemIsSelectable)  # Make non-selectable
+                list_item.setFlags(list_item.flags() & ~QtCore.Qt.ItemIsSelectable)
                 dir_widget = widgets.DirectoryListItem()
-                dir_widget.set_data(str(current_dir))
+                dir_widget.set_data(str(rel_path), depth - 1)
                 list_item.setSizeHint(dir_widget.sizeHint())
                 self.view.list_sequences.addItem(list_item)
                 self.view.list_sequences.setItemWidget(list_item, dir_widget)
             
-            # Add the sequence item
+            # Add the sequence item with indentation
             list_item = QtWidgets.QListWidgetItem()
             custom_widget = widgets.CustomListItem()
             custom_widget.set_data(
                 name=image_file.name,
                 type=image_file.extension.upper(),
                 range=self.get_frame_range(image_file),
+                depth=depth
             )
             list_item.setSizeHint(custom_widget.sizeHint())
             self.view.list_sequences.addItem(list_item)
             self.view.list_sequences.setItemWidget(list_item, custom_widget)
+
 
     def get_frame_range(self, image_file: ImageFile) -> str:
         
