@@ -25,11 +25,11 @@ class ImageFile(ABC):
             return SingleFile(Path(path))
         except ValueError:
             return SingleFile(Path(path))
-        
+
     @staticmethod
     def from_file_sequence(file_sequence: FileSequence):
         return SequenceFile(file_sequence)
-    
+
     @abstractmethod
     def get_path(self) -> str:
         """Return the path as a string."""
@@ -305,7 +305,7 @@ class MovieFile(SingleFile):
         super().__init__(path)
         print("init movie file")
         self._first_frame = 1
-        self._last_frame = 666  # Will be updated by ReadWrapper
+        self._last_frame = -1  # Will be updated by ReadWrapper
 
     def get_user_text(self) -> str:
         # For movie files, we return just the path
@@ -373,6 +373,7 @@ class ReadWrapper:
             self.file_handler = ImageFile.from_path(read_node["file"].getValue())
         else:
             self.file_handler = handler
+
     @classmethod
     def from_path(cls, abs_path: str) -> "ReadWrapper":
         """Creates a read node from an absolute path"""
@@ -382,16 +383,18 @@ class ReadWrapper:
 
         handler = ImageFile.from_path(abs_path)
 
-        read_node = nuke.createNode("Read") # type: ignore
+        read_node = nuke.createNode("Read")  # type: ignore
         read_node["file"].fromUserText(handler.get_user_text())
 
-        if hasattr(handler, 'set_frame_range'):
-            handler.set_frame_range(int(read_node["first"].getValue()), int(read_node["last"].getValue())) # type: ignore 
+        if hasattr(handler, "set_frame_range"):
+            handler.set_frame_range(
+                int(read_node["first"].getValue()), int(read_node["last"].getValue())
+            )  # type: ignore
 
         return cls(read_node, handler)
 
     @classmethod
-    def from_write(cls, source_node: nuke.Node) -> "ReadWrapper": # type: ignore
+    def from_write(cls, source_node: nuke.Node) -> "ReadWrapper":  # type: ignore
         """Creates a read node from a write node"""
         # if "file" not in source_node.knobs():
         #     raise ValueError("Source node does not have a file knob")
@@ -409,13 +412,17 @@ class ReadWrapper:
         return read_wrapper
 
     @classmethod
-    def from_file_sequence(cls, file_sequence: FileSequence):
-        
-        handler = ImageFile.from_file_sequence(file_sequence)
-        read_node = nuke.createNode("Read") # type: ignore
+    def from_file_sequence(cls, file_seq: FileSequence):
+        handler = ImageFile.from_file_sequence(file_seq)
+        read_node = nuke.createNode("Read")  # type: ignore
         read_node["file"].fromUserText(handler.get_user_text())
         return cls(read_node, handler)
-    
+
+    @classmethod
+    def from_image_file(cls, image_file: ImageFile) -> "ReadWrapper":
+        read_node = nuke.createNode("Read")  # type: ignore
+        read_node["file"].fromUserText(image_file.get_user_text())
+        return cls(read_node, image_file)
 
     def folderize(self) -> "ReadWrapper":
         """Creates a folder with the same name as the sequence/file and moves files into it"""
@@ -514,7 +521,7 @@ class ReadWrapper:
 
         new_handler = self.file_handler.copy_to(components, dir_path)
 
-        read_node = nuke.createNode("Read") # type: ignore
+        read_node = nuke.createNode("Read")  # type: ignore
 
         read_node["file"].fromUserText(new_handler.get_user_text())
 
@@ -553,15 +560,13 @@ class ReadWrapper:
     def delimiter(self) -> str:
         return self.file_handler.delimiter
 
-
-
     @classmethod
-    def from_read(cls, source_node: nuke.Node) -> "ReadWrapper": # type: ignore
+    def from_read(cls, source_node: nuke.Node) -> "ReadWrapper":  # type: ignore
         """Creates a read wrapper from a read node"""
         return cls(source_node)
 
 
-def node_from_sequence_string(sequence_string: str) -> nuke.Node: # type: ignore
+def node_from_sequence_string(sequence_string: str) -> nuke.Node:  # type: ignore
     """Utility function to create a Read node from a path"""
     wrapper = ReadWrapper.from_path(sequence_string)
     return wrapper.read_node

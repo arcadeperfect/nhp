@@ -18,11 +18,25 @@ class CustomListItem(QtWidgets.QWidget):
         self.nameField = QtWidgets.QLineEdit()
         self.nameField.setReadOnly(True)
         
+        self.typeLabel = QtWidgets.QLabel("Type:")
+        self.typeField = QtWidgets.QLineEdit()
+        self.typeField.setReadOnly(True)
+        
+        self.rangeLabel = QtWidgets.QLabel("Range:")
+        self.rangeField = QtWidgets.QLineEdit()
+        self.rangeField.setReadOnly(True)
+        
         self.layout.addWidget(self.nameLabel)
         self.layout.addWidget(self.nameField, 3)
+        self.layout.addWidget(self.typeLabel)
+        self.layout.addWidget(self.typeField, 1)
+        self.layout.addWidget(self.rangeLabel)
+        self.layout.addWidget(self.rangeField, 1)
         
-    def set_data(self, name=""):
+    def set_data(self, name: str, type: str, range: str):
         self.nameField.setText(name)
+        self.typeField.setText(type)
+        self.rangeField.setText(range)
         
         
         

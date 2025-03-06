@@ -2,7 +2,7 @@ from typing import List, Tuple
 from pathlib import Path
 import pysequitur
 from pysequitur import crawl
-from nhp.read_tools.lib import ImageFile, ReadWrapper
+from nhp.read_tools.read_wrapper import ImageFile, ReadWrapper
 
 
 class Model:
@@ -42,15 +42,7 @@ class Model:
     def get_all_sequences(self) -> List[ImageFile]:
         """Get all found sequences"""
         return self._ImageFiles
-    
-    def create_read_nodes(self, indices: List[int]) -> List[ReadWrapper]:
-        """Create read nodes for selected sequences"""
-        read_nodes = []
-        for idx in indices:
-            sequence = self._ImageFiles[idx]
-            read_nodes.append(ReadWrapper.from_file_sequence(sequence.sequence))
-        return read_nodes
-    
+        
     def clear(self) -> None:
         """Clear all sequences"""
         self._ImageFiles.clear()
