@@ -22,7 +22,7 @@ class DirectoryTree:
         root = cls("", "", [], [])
         
         # First, organize files by directory
-        dir_files: dict[str, list[ImageFile]] = {}
+        dir_files: dict[str, List[ImageFile]] = {}
         for image_file in files:
             rel_path = str(image_file.directory.relative_to(base_dir))
             if rel_path not in dir_files:
@@ -30,9 +30,9 @@ class DirectoryTree:
             dir_files[rel_path].append(image_file)
         
         # Build the tree structure
-        for dir_path, dir_files in dir_files.items():
+        for dir_path, files in dir_files.items():
             if not dir_path:  # Root directory
-                root.files = dir_files
+                root.files = files
                 continue
             
             parts = Path(dir_path).parts
@@ -55,7 +55,7 @@ class DirectoryTree:
                     current = new_node
             
             # Add files to the current directory
-            current.files = dir_files
+            current.files = files
             
         return root
 

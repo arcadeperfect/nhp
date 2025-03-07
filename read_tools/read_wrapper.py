@@ -1,28 +1,45 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Union
-from pysequitur import file_sequence, Components, FileSequence, file_types
+from typing import Optional
+
 import nuke
+
+from nhp.pysequitur.file_sequence import FileSequence, SequenceFactory, Components
+from nhp.pysequitur.file_types import MOVIE_FILE_TYPES
+
+from enum import Enum, auto
+
+
+class FileHandlerType(Enum):
+    """Enumeration of possible file handler types."""
+
+    MOVIE = auto()
+    SEQUENCE = auto()
+    SINGLE = auto()
+    UNKNOWN = auto()
 
 
 class ImageFile(ABC):
     """Base class for handling image files (both sequences and single images)"""
 
     def __init__(self, id: Optional[int] = None):
-            self.id = id
+        self.id = id
 
     @staticmethod
-    def from_path(path: Path, id = None) -> "MovieFile| SequenceFile | SingleFile":
+    def from_path(path: Path, id=None) -> "MovieFile| SequenceFile | SingleFile":
         """Factory method to create appropriate handler"""
-
+        print("ImageFile from path")
         extension = Path(path).suffix.lstrip(".").lower()
 
-        if extension in file_types.MOVIE_FILE_TYPES:
+        if extension in MOVIE_FILE_TYPES:
             print("movie file")
             return MovieFile(Path(path))
 
         try:
-            sequence = FileSequence.match_sequence_string_absolute(str(path), min_frames=1)
+            sequence = SequenceFactory.from_sequence_string_absolute(
+                str(path), min_frames=1
+            )
+            # sequence = FileSequence.match_sequence_string_absolute(str(path), min_frames=1)
             if sequence:
                 return SequenceFile(sequence)
             return SingleFile(Path(path))
@@ -56,7 +73,7 @@ class ImageFile(ABC):
         pass
 
     @abstractmethod
-    def folderize(self, folder_name: str) -> str:
+    def folderize(self, folder_name: str, virtual: bool = False) -> "ImageFile":
         """Move files to a new folder with the given name."""
         pass
 
@@ -66,27 +83,27 @@ class ImageFile(ABC):
         pass
 
     @abstractmethod
-    def rename(self, components: Components) -> str:
+    def rename(self, components: Components, virtual: bool = False) -> "ImageFile":
         """Rename files according to components."""
         pass
 
     @abstractmethod
-    def offset_frames(self, offset: int, node: nuke.Node) -> None:  # type: ignore
+    def offset_frames(
+        self, offset: int, node: nuke.Node, virtual: bool = False
+    ) -> "ImageFile":  # type: ignore
         """Offset frame numbers by the given amount."""
         pass
 
     @abstractmethod
     def copy_to(
-        self, components: Components, target_dir: Optional[Path]
+        self, components: Components, target_dir: Optional[Path], virtual: bool = False
     ) -> "ImageFile":
         """Copy files to a new location with optional new components."""
         pass
 
     @abstractmethod
     def move_to(
-        self,
-        new_directory: Path,
-        create_directory: bool = False,
+        self, new_directory: Path, create_directory: bool = False, virtual: bool = False
     ) -> "ImageFile":
         """Move files to a new location with optional new components."""
         pass
@@ -127,6 +144,12 @@ class ImageFile(ABC):
         """Return the frame number delimiter."""
         pass
 
+    @property
+    @abstractmethod
+    def padding(self) -> int:
+        """Return the padding of the filename."""
+        pass
+
 
 class SequenceFile(ImageFile):
     """Handler for file sequences"""
@@ -146,40 +169,58 @@ class SequenceFile(ImageFile):
     def last_frame(self) -> int:
         return self.sequence.last_frame
 
-    def folderize(self, folder_name: str) -> str:
+    def folderize(self, folder_name: str, virtual: bool = False) -> "ImageFile":
+        if virtual:
+            return ImageFile.from_file_sequence(
+                self.sequence.folderize(folder_name, virtual=virtual)
+            )
         self.sequence.folderize(folder_name)
-        return self.sequence.absolute_file_name
+        return self
 
-    def delete_files(self) -> None:
+    def delete_files(self) -> "ImageFile":
         self.sequence.delete_files()
+        return self
 
-    def rename(self, components: Components) -> str:
-        self.sequence.rename_to(components)
-        return self.sequence.absolute_file_name
+    def rename(self, components: Components, virtual: bool = False) -> "ImageFile":
+        return ImageFile.from_file_sequence(
+            self.sequence.rename_to(components, virtual=virtual)
+        )
 
-    def offset_frames(self, offset: int, node: nuke.Node) -> None:  # type: ignore
+    def offset_frames(self, offset: int, node: nuke.Node, virtual: bool = False) -> "ImageFile":  # type: ignore
+        if virtual:
+            return ImageFile.from_file_sequence(
+                self.sequence.offset_frames(offset, virtual=virtual)
+            )
         self.sequence.offset_frames(offset)
         node["file"].setValue(self.get_path())
         node["first"].setValue(self.first_frame())
         node["origfirst"].setValue(self.first_frame())
         node["last"].setValue(self.last_frame())
         node["origlast"].setValue(self.last_frame())
+        return self
 
     def copy_to(
-        self, components: Components, target_dir: Optional[Path]
-    ) -> "SequenceFile":
-        new_seq = self.sequence.copy_to(
-            new_name=components, new_directory=target_dir if target_dir else None
+        self, components: Components, target_dir: Optional[Path], virtual: bool = False
+    ) -> "ImageFile":
+        
+        return ImageFile.from_file_sequence(
+            self.sequence.copy_to(
+                new_name=components, new_directory=target_dir if target_dir else None, virtual=virtual
+            )
         )
-        return SequenceFile(new_seq)
 
     def move_to(
         self,
         new_directory: Path,
         create_directory: bool = False,
-    ) -> str:
+        virtual: bool = False
+    ) -> "ImageFile":
+        if virtual:
+            return ImageFile.from_file_sequence(
+                self.sequence.move_to(new_directory, create_directory=create_directory, virtual=virtual)
+            )
         self.sequence.move_to(new_directory, create_directory=create_directory)
-        return self.sequence.absolute_file_name
+        return self
 
     @property
     def directory(self) -> Path:
@@ -205,11 +246,16 @@ class SequenceFile(ImageFile):
     def delimiter(self) -> str:
         return self.sequence.delimiter
 
+    @property
+    def padding(self) -> int:
+        return self.sequence.padding
+
 
 class SingleFile(ImageFile):
     """Handler for single image files"""
 
     def __init__(self, path: Path):
+        print("init single file")
         self.path = path
         if not path.exists():
             raise ValueError(f"File {path} does not exist")
@@ -226,46 +272,53 @@ class SingleFile(ImageFile):
     def last_frame(self) -> int:
         return 1
 
-    def folderize(self, folder_name: str) -> str:
+    def folderize(self, folder_name: str, virtual: bool = False) -> "ImageFile":
         folder_path = self.path.parent / folder_name
         folder_path.mkdir(exist_ok=True)
         new_path = folder_path / self.path.name
-        self.path.rename(new_path)
-        self.path = new_path
-        return str(new_path)
+
+        if virtual:
+            return ImageFile.from_path(new_path, self.id)
+        self.path = self.path.rename(new_path)
+        return self
 
     def delete_files(self) -> None:
         self.path.unlink()
 
-    def rename(self, components: Components) -> str:
+    def rename(self, components: Components, virtual: bool = False) -> ImageFile:
         new_name = components.prefix or self.path.stem
         new_ext = components.extension or self.path.suffix.lstrip(".")
         new_path = self.path.parent / f"{new_name}.{new_ext}"
-        self.path.rename(new_path)
-        self.path = new_path
-        return str(new_path)
+
+        if not virtual:
+            self.path = self.path.rename(new_path)
+            return self
+
+        return ImageFile.from_path(new_path, self.id)
 
     def move_to(
-        self,
-        new_directory: Path,
-        create_directory: bool = False,
-    ) -> str:
+        self, new_directory: Path, create_directory: bool = False, virtual: bool = False
+    ) -> ImageFile:
+
+        new_path = new_directory / self.path.name
+    
+        if virtual:
+            return ImageFile.from_path(new_path, self.id)
+    
         if create_directory:
             new_directory.mkdir(exist_ok=True, parents=True)
 
-        new_path = new_directory / self.path.name
-        self.path.rename(new_path)
-        self.path = new_path
-        return str(new_path)
+        self.path = self.path.rename(new_path)
+        return self 
 
-    def offset_frames(self, offset: int, node: nuke.Node) -> None:  # type: ignore
+    def offset_frames(self, offset: int, node: nuke.Node, virtual: bool = False) -> "ImageFile":  # type: ignore
         # No-op for single files
         print("not supported for single files")
-        pass
+        return self
 
     def copy_to(
-        self, components: Components, target_dir: Optional[Path]
-    ) -> "SingleFile":
+        self, components: Components, target_dir: Optional[Path], virtual: bool = False
+    ) -> "ImageFile":
         import shutil
 
         target_dir = target_dir or self.path.parent
@@ -274,9 +327,9 @@ class SingleFile(ImageFile):
         new_name = components.prefix or self.path.stem
         new_ext = components.extension or self.path.suffix.lstrip(".")
         new_path = target_dir / f"{new_name}.{new_ext}"
-
-        shutil.copy2(self.path, new_path)
-        return SingleFile(new_path)
+        if not virtual:
+            shutil.copy2(self.path, new_path)
+        return ImageFile.from_path(new_path, self.id)
 
     @property
     def directory(self) -> Path:
@@ -302,6 +355,10 @@ class SingleFile(ImageFile):
     def delimiter(self) -> str:
         return ""
 
+    @property
+    def padding(self) -> int:
+        return 0
+
 
 class MovieFile(SingleFile):
     """Handler for movie files that have multiple frames"""
@@ -317,7 +374,7 @@ class MovieFile(SingleFile):
         # The frame range will be set by the Read node in Nuke
         return str(self.path)
 
-    def set_frame_range(self, first_frame: int, last_frame: int) -> None:
+    def set_frame_range(self, first_frame: int, last_frame: int) -> "ImageFile":
         if not isinstance(first_frame, int):
             raise TypeError("first_frame must be an integer")
 
@@ -326,10 +383,11 @@ class MovieFile(SingleFile):
 
         self._first_frame = first_frame
         self._last_frame = last_frame
+        return self
 
     def copy_to(
-        self, components: Components, target_dir: Optional[Path]
-    ) -> "MovieFile":
+        self, components: Components, target_dir: Optional[Path], virtual: bool = False
+    ) -> "ImageFile":
         import shutil
 
         target_dir = target_dir or self.path.parent
@@ -339,24 +397,24 @@ class MovieFile(SingleFile):
         new_ext = components.extension or self.path.suffix.lstrip(".")
         new_path = target_dir / f"{new_name}.{new_ext}"
 
-        shutil.copy2(self.path, new_path)
+        if not virtual:
+            shutil.copy2(self.path, new_path)
         new_movie = MovieFile(new_path)
         new_movie.set_frame_range(self._first_frame, self._last_frame)
         return new_movie
 
-    def offset_frames(self, offset: int, node: nuke.Node) -> None:  # type: ignore
+    def offset_frames(self, offset: int, node: nuke.Node, virtual: bool = False) -> "ImageFile":  # type: ignore
         node["frame_mode"].getValue(2)
         k = node["frame"]
         k.setValue(str(int(k.getValue() or 0) + offset))
+        return self
 
     @property
     def frame_count(self) -> int:
         return self._last_frame - self._first_frame + 1
 
-    def rename(self, components: Components) -> str:
-        new_path = super().rename(components)
-        # Frame range is maintained via self._first_frame and self._last_frame
-        return new_path
+    def rename(self, components: Components, virtual: bool = False) -> "ImageFile":
+        return super().rename(components, virtual=virtual)
 
     def first_frame(self) -> int:
         return self._first_frame
@@ -375,12 +433,25 @@ class ReadWrapper:
         self.read_node = read_node
 
         if not handler:
+            print("init read wrapper, no handler")
             self.file_handler = ImageFile.from_path(read_node["file"].getValue())
         else:
+            print("init read wrapper, handler")
             self.file_handler = handler
 
+    @property
+    def handler_type(self) -> FileHandlerType:
+        """Returns the type of file handler as an enum value."""
+        if isinstance(self.file_handler, MovieFile):
+            return FileHandlerType.MOVIE
+        elif isinstance(self.file_handler, SequenceFile):
+            return FileHandlerType.SEQUENCE
+        elif isinstance(self.file_handler, SingleFile):
+            return FileHandlerType.SINGLE
+        return FileHandlerType.UNKNOWN
+
     @classmethod
-    def from_path(cls, abs_path: str) -> "ReadWrapper":
+    def from_path(cls, abs_path: str, virtual: bool = False) -> "ReadWrapper":
         """Creates a read node from an absolute path"""
         path = Path(abs_path)
         if not path.parent.exists():
@@ -388,11 +459,14 @@ class ReadWrapper:
 
         handler = ImageFile.from_path(path)
 
+        if virtual:
+            return cls(None, handler)
+
         read_node = nuke.createNode("Read")  # type: ignore
         read_node["file"].fromUserText(handler.get_user_text())
 
         if hasattr(handler, "set_frame_range"):
-            handler.set_frame_range(
+            handler.set_frame_range(  # type: ignore
                 int(read_node["first"].getValue()), int(read_node["last"].getValue())
             )  # type: ignore
 
@@ -462,6 +536,7 @@ class ReadWrapper:
         padding: Optional[int] = None,
         suffix: Optional[str] = None,
         extension: Optional[str] = None,
+        preview=False,
     ) -> "ReadWrapper":
         """Renames the file/sequence and reconnects the node"""
         components = Components(
@@ -471,6 +546,11 @@ class ReadWrapper:
             suffix=suffix,
             extension=extension,
         )
+
+        if preview:
+            new_path = self.file_handler.rename(components, virtual=True)
+            print(new_path)
+            return ReadWrapper.from_path(new_path, virtual=True)
 
         new_path = self.file_handler.rename(components)
         self.read_node["file"].setValue(new_path)
@@ -564,6 +644,10 @@ class ReadWrapper:
     @property
     def delimiter(self) -> str:
         return self.file_handler.delimiter
+
+    @property
+    def padding(self) -> int:
+        return self.file_handler.padding
 
     @classmethod
     def from_read(cls, source_node: nuke.Node) -> "ReadWrapper":  # type: ignore

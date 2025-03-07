@@ -1,7 +1,7 @@
 from typing import Optional
-from nhp.read_tools.recursive_loader import view
-from nhp.read_tools.recursive_loader import model
-from nhp.read_tools.recursive_loader import controller
+from nhp.read_tools.recursive_loader_gui import view
+from nhp.read_tools.recursive_loader_gui import model
+from nhp.read_tools.recursive_loader_gui import controller
 from pathlib import Path
 # global to prevent from being removed
 VIEW = None

@@ -1,10 +1,8 @@
 from pathlib import Path
 from typing import List, Optional
-from PySide2 import QtWidgets, QtCore
-from nhp.read_tools.read_wrapper import ImageFile, MovieFile, ReadWrapper
-from nhp.read_tools.recursive_loader import nuke_interface
-from nhp.read_tools.recursive_loader.view import View
-from nhp.read_tools.recursive_loader.model import Model
+from nhp.read_tools.recursive_loader_gui import nuke_interface
+from nhp.read_tools.recursive_loader_gui.view import View
+from nhp.read_tools.recursive_loader_gui.model import Model
 
 
 class Controller:

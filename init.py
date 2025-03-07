@@ -1,3 +1,4 @@
-import pysequitur
+import nuke
 
-import read_tools
+
+nuke.pluginAddPath("./read_tools")

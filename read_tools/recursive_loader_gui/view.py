@@ -1,24 +1,25 @@
-from PySide2 import QtWidgets, QtCore, QtGui
-from PySide2.QtCore import Signal
+from PySide2 import QtWidgets, QtCore, QtGui # type: ignore
+from PySide2.QtCore import Signal # type: ignore
 from pathlib import Path
-from typing import List, Optional
-from dataclasses import dataclass
+from typing import List
 from nhp.read_tools.read_wrapper import ImageFile
 from .model import DirectoryTree
 import nuke
 
 ID_ROLE = QtCore.Qt.UserRole + 1
 
+
 class TreePresenter:
-    
-    def __init__(self, view: 'View'):
+    def __init__(self, view: "View"):
         self.view = view
 
     def display_tree(self, tree: DirectoryTree) -> None:
         """Display the directory tree in the view"""
         self._display_node(tree)
 
-    def _display_node(self, node: DirectoryTree, prefix: str = "", is_last: bool = True) -> None:
+    def _display_node(
+        self, node: DirectoryTree, prefix: str = "", is_last: bool = True
+    ) -> None:
         """Recursively display a node and its children"""
         # Skip displaying root directory
         if node.name:
@@ -29,35 +30,35 @@ class TreePresenter:
                 "",  # range
                 "",  # path
                 -1,
-                selectable=False
+                selectable=False,
             )
-        
+
         # Create new prefix for children
         new_prefix = prefix
         if node.name:  # Not for root
             new_prefix = prefix + ("    " if is_last else "│   ")
-        
+
         # Process subdirectories first
         for i, subdir in enumerate(sorted(node.subdirs, key=lambda x: x.name)):
             is_last_dir = i == len(node.subdirs) - 1
             is_last_item = is_last_dir and not node.files
             self._display_node(subdir, new_prefix, is_last_item)
-        
+
         # Then process files
         for i, file in enumerate(node.files):
             is_last_file = i == len(node.files) - 1
             file_prefix = new_prefix + ("└── " if is_last_file else "├── ")
-            
+
             if file.id is None:
                 raise ValueError(f"File {file.name} has no id")
-            
+
             self.view.add_row(
                 f"{file_prefix}[{file.extension.upper()}]",
                 file.name,
                 file.extension.upper(),
                 self._get_frame_range(file),
                 str(file.get_path()),
-                file.id
+                file.id,
             )
 
     @staticmethod
@@ -87,8 +88,6 @@ class NoMarginDelegate(QtWidgets.QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
-
-
 class View(QtWidgets.QWidget):
     # Signals
     directory_selected = Signal(Path)
@@ -96,8 +95,6 @@ class View(QtWidgets.QWidget):
     load_requested = Signal(list)
     cancel_requested = Signal()
     select_all_requested = Signal()
-
-    
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -165,7 +162,7 @@ class View(QtWidgets.QWidget):
         self.table.setColumnWidth(2, 50)  # Type
         self.table.setColumnWidth(3, 100)  # Range
         self.table.setColumnWidth(4, 500)  # Path
-        
+
         # Create button layout
         button_layout = QtWidgets.QHBoxLayout()
         self.button_select_all = QtWidgets.QPushButton("Select All")
@@ -191,14 +188,14 @@ class View(QtWidgets.QWidget):
 
         # Set minimum size
         self.setMinimumSize(1400, 800)
-        
+
         # self.__row_counter = 0
         self.id_lookup: dict[int, int] = {}
 
     def _on_browse_clicked(self):
         """Handle browse button click"""
-        directory = Path(nuke.getFilename("Select Directory"))
-        
+        directory = Path(nuke.getFilename("Select Directory")) # type: ignore
+
         if directory.is_dir():
             if not directory.exists():
                 return
@@ -206,14 +203,10 @@ class View(QtWidgets.QWidget):
             directory = directory.parent
             if not directory.exists():
                 return
-        
+
         if directory:
             self.directory_selected.emit(directory)
-        # directory = QtWidgets.QFileDialog.getExistingDirectory(
-        #     self, "Select Directory", str(Path.home())
-        # )
-        # if directory:
-        #     self.directory_selected.emit(Path(directory))
+        
 
     def _on_scan_clicked(self):
         """Handle scan button click"""
@@ -225,9 +218,6 @@ class View(QtWidgets.QWidget):
 
     def _on_load_clicked(self):
         """Handle load button click"""
-        # selected = self.get_selected_indices()
-        # if selected:
-        #     self.load_requested.emit(selected)
         self.load_requested.emit(self.get_selected_ids())
 
     def _on_cancel_clicked(self):
@@ -247,7 +237,7 @@ class View(QtWidgets.QWidget):
         path: str,
         id: int,
         selectable: bool = True,
-    ):
+    ) -> list[QtWidgets.QTableWidgetItem]:
         """Add a row to the table"""
         row = self.table.rowCount()
         self.table.insertRow(row)
@@ -271,10 +261,7 @@ class View(QtWidgets.QWidget):
                 item.setData(ID_ROLE, id)
             self.table.setItem(row, col, item)
         
-        
-        # if id != -1:
-        #     self.id_lookup[self.__row_counter] = id
-        # self.__row_counter += 1
+        return items
 
     def set_path_text(self, path: str):
         """Set the path display text"""
@@ -297,19 +284,19 @@ class View(QtWidgets.QWidget):
         """Select all selectable items"""
         self.table.selectAll()
 
-    def get_selected_indeces(self) -> List[int]:
-            """Get indices of selected rows"""
-            selected_ranges = self.table.selectedRanges()
-            selected_rows = set()
-            for range_ in selected_ranges:
-                for row in range(range_.topRow(), range_.bottomRow() + 1):
-                    # Check if the item in the first column is selectable
-                    item = self.table.item(row, 0)
-                    if item and item.flags() & QtCore.Qt.ItemIsSelectable:
-                        selected_rows.add(row)
-            return list(selected_rows)
+    def get_selected_indices(self) -> List[int]:
+        """Get indices of selected rows"""
+        selected_ranges = self.table.selectedRanges()
+        selected_rows = set()
+        for range_ in selected_ranges:
+            for row in range(range_.topRow(), range_.bottomRow() + 1):
+                # Check if the item in the first column is selectable
+                item = self.table.item(row, 0)
+                if item and item.flags() & QtCore.Qt.ItemIsSelectable:
+                    selected_rows.add(row)
+        return list(selected_rows)
 
     def get_selected_ids(self) -> List[int]:
         """Get IDs of selected rows"""
-        selected_rows = self.get_selected_indeces()
+        selected_rows = self.get_selected_indices()
         return [self.table.item(row, 0).data(ID_ROLE) for row in selected_rows]
